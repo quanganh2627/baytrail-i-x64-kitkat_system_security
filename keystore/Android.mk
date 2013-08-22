@@ -18,6 +18,9 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_CFLAGS := -Wall -Wextra -Werror
+ifeq ($(strip $(INTEL_FEATURE_ARKHAM)),true)
+LOCAL_CFLAGS += -DINTEL_FEATURE_ARKHAM
+endif
 LOCAL_SRC_FILES := keystore.cpp keyblob_utils.cpp
 LOCAL_C_INCLUDES := external/openssl/include
 LOCAL_SHARED_LIBRARIES := libcutils libcrypto libhardware libkeystore_binder libutils liblog libbinder
