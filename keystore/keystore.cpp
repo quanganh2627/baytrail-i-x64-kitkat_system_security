@@ -680,6 +680,11 @@ public:
         AES_KEY passwordAesKey;
         AES_set_encrypt_key(passwordKey, MASTER_KEY_SIZE_BITS, &passwordAesKey);
         Blob masterKeyBlob(mMasterKey, sizeof(mMasterKey), mSalt, sizeof(mSalt), TYPE_MASTER_KEY);
+#ifdef INTEL_FEATURE_ARKHAM
+        if (is_container_user(mUserId)) {
+            masterKeyBlob.setEncrypted(true);
+        }
+#endif
         return masterKeyBlob.writeBlob(mMasterKeyFile, &passwordAesKey, STATE_NO_ERROR, entropy);
     }
 
