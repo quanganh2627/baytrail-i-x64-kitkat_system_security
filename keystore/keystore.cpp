@@ -66,6 +66,9 @@
 #define VALUE_SIZE      32768
 #define PASSWORD_SIZE   VALUE_SIZE
 
+#ifdef INTEL_FEATURE_ARKHAM
+#include "../../../vendor/intel/arkham/system/security/keystore/keystore_containers.cpp"
+#endif
 
 struct BIO_Delete {
     void operator()(BIO* p) const {
@@ -181,6 +184,12 @@ static uid_t get_user_id(uid_t uid) {
 
 
 static bool has_permission(uid_t uid, perm_t perm) {
+#ifdef INTEL_FEATURE_ARKHAM
+    if (is_container_user(get_user_id(uid))) {
+        uid = AID_SYSTEM;
+    }
+#endif
+
     // All system users are equivalent for multi-user support.
     if (get_app_id(uid) == AID_SYSTEM) {
         uid = AID_SYSTEM;
@@ -262,7 +271,11 @@ static int encode_key(char* out, const android::String8& keyName) {
 }
 
 static int encode_key_for_uid(char* out, uid_t uid, const android::String8& keyName) {
+#ifdef INTEL_FEATURE_ARKHAM
+    int n = snprintf(out, NAME_MAX, "%u_", is_container_user(get_user_id(uid)) ? (uid % AID_USER) : uid);
+#else
     int n = snprintf(out, NAME_MAX, "%u_", uid);
+#endif
     out += n;
 
     return n + encode_key(out, keyName);
@@ -893,14 +906,22 @@ public:
     }
 
     ResponseCode writeMasterKey(const android::String8& pw, uid_t uid) {
+#ifdef INTEL_FEATURE_ARKHAM
+        UserState* userState = getUserState(uid);
+#else
         uid_t user_id = get_user_id(uid);
         UserState* userState = getUserState(user_id);
+#endif
         return userState->writeMasterKey(pw, mEntropy);
     }
 
     ResponseCode readMasterKey(const android::String8& pw, uid_t uid) {
+#ifdef INTEL_FEATURE_ARKHAM
+        UserState* userState = getUserState(uid);
+#else
         uid_t user_id = get_user_id(uid);
         UserState* userState = getUserState(user_id);
+#endif
         return userState->readMasterKey(pw, mEntropy);
     }
 
@@ -913,14 +934,24 @@ public:
     android::String8 getKeyNameForUid(const android::String8& keyName, uid_t uid) {
         char encoded[encode_key_length(keyName)];
         encode_key(encoded, keyName);
+#ifdef INTEL_FEATURE_ARKHAM
+        return android::String8::format("%u_%s",
+                is_container_user(get_user_id(uid)) ? (uid % AID_USER) : uid, encoded);
+#else
         return android::String8::format("%u_%s", uid, encoded);
+#endif
     }
 
     android::String8 getKeyNameForUidWithDir(const android::String8& keyName, uid_t uid) {
         char encoded[encode_key_length(keyName)];
         encode_key(encoded, keyName);
+#ifdef INTEL_FEATURE_ARKHAM
+        return android::String8::format("%s/%u_%s", getUserState(uid)->getUserDirName(),
+                is_container_user(get_user_id(uid)) ? (uid % AID_USER) : uid, encoded);
+#else
         return android::String8::format("%s/%u_%s", getUserState(uid)->getUserDirName(), uid,
                 encoded);
+#endif
     }
 
     bool reset(uid_t uid) {
@@ -2130,6 +2161,19 @@ public:
         closedir(dir);
 
         return rc;
+    }
+
+    int32_t wipe_user(int32_t user_id) {
+#ifdef INTEL_FEATURE_ARKHAM
+        uid_t callingUid = IPCThreadState::self()->getCallingUid();
+        if (get_app_id(callingUid) == AID_SYSTEM) {
+            return wipe_container_keystore(user_id);
+        }
+        ALOGE("permission denied for %d to wipe_user %d", callingUid, user_id);
+#else
+        ALOGE("wipe_user %d not implemented", user_id);
+#endif
+        return SYSTEM_ERROR;
     }
 
 private:
