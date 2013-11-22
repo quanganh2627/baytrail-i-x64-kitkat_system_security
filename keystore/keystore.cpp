@@ -66,9 +66,6 @@
 #define VALUE_SIZE      32768
 #define PASSWORD_SIZE   VALUE_SIZE
 
-#ifdef INTEL_FEATURE_ARKHAM
-#include "../../../vendor/intel/arkham/system/security/keystore/keystore_containers.cpp"
-#endif
 
 struct BIO_Delete {
     void operator()(BIO* p) const {
@@ -184,12 +181,6 @@ static uid_t get_user_id(uid_t uid) {
 
 
 static bool has_permission(uid_t uid, perm_t perm) {
-#ifdef INTEL_FEATURE_ARKHAM
-    if (is_container_user(get_user_id(uid))) {
-        uid = AID_SYSTEM;
-    }
-#endif
-
     // All system users are equivalent for multi-user support.
     if (get_app_id(uid) == AID_SYSTEM) {
         uid = AID_SYSTEM;
@@ -268,6 +259,13 @@ static int encode_key(char* out, const android::String8& keyName) {
     }
     *out = '\0';
     return length;
+}
+
+static int encode_key_for_uid(char* out, uid_t uid, const android::String8& keyName) {
+    int n = snprintf(out, NAME_MAX, "%u_", uid);
+    out += n;
+
+    return n + encode_key(out, keyName);
 }
 
 /*
@@ -680,11 +678,6 @@ public:
         AES_KEY passwordAesKey;
         AES_set_encrypt_key(passwordKey, MASTER_KEY_SIZE_BITS, &passwordAesKey);
         Blob masterKeyBlob(mMasterKey, sizeof(mMasterKey), mSalt, sizeof(mSalt), TYPE_MASTER_KEY);
-#ifdef INTEL_FEATURE_ARKHAM
-        if (is_container_user(mUserId)) {
-            masterKeyBlob.setEncrypted(true);
-        }
-#endif
         return masterKeyBlob.writeBlob(mMasterKeyFile, &passwordAesKey, STATE_NO_ERROR, entropy);
     }
 
@@ -900,22 +893,14 @@ public:
     }
 
     ResponseCode writeMasterKey(const android::String8& pw, uid_t uid) {
-#ifdef INTEL_FEATURE_ARKHAM
-        UserState* userState = getUserState(uid);
-#else
         uid_t user_id = get_user_id(uid);
         UserState* userState = getUserState(user_id);
-#endif
         return userState->writeMasterKey(pw, mEntropy);
     }
 
     ResponseCode readMasterKey(const android::String8& pw, uid_t uid) {
-#ifdef INTEL_FEATURE_ARKHAM
-        UserState* userState = getUserState(uid);
-#else
         uid_t user_id = get_user_id(uid);
         UserState* userState = getUserState(user_id);
-#endif
         return userState->readMasterKey(pw, mEntropy);
     }
 
@@ -928,24 +913,14 @@ public:
     android::String8 getKeyNameForUid(const android::String8& keyName, uid_t uid) {
         char encoded[encode_key_length(keyName)];
         encode_key(encoded, keyName);
-#ifdef INTEL_FEATURE_ARKHAM
-        return android::String8::format("%u_%s",
-                is_container_user(get_user_id(uid)) ? (uid % AID_USER) : uid, encoded);
-#else
         return android::String8::format("%u_%s", uid, encoded);
-#endif
     }
 
     android::String8 getKeyNameForUidWithDir(const android::String8& keyName, uid_t uid) {
         char encoded[encode_key_length(keyName)];
         encode_key(encoded, keyName);
-#ifdef INTEL_FEATURE_ARKHAM
-        return android::String8::format("%s/%u_%s", getUserState(uid)->getUserDirName(),
-                is_container_user(get_user_id(uid)) ? (uid % AID_USER) : uid, encoded);
-#else
         return android::String8::format("%s/%u_%s", getUserState(uid)->getUserDirName(), uid,
                 encoded);
-#endif
     }
 
     bool reset(uid_t uid) {
@@ -1092,7 +1067,17 @@ public:
 
     ResponseCode getKeyForName(Blob* keyBlob, const android::String8& keyName, const uid_t uid,
             const BlobType type) {
-        android::String8 filepath8(getKeyNameForUidWithDir(keyName, uid));
+        char filename[NAME_MAX];
+        encode_key_for_uid(filename, uid, keyName);
+
+        UserState* userState = getUserState(uid);
+        android::String8 filepath8;
+
+        filepath8 = android::String8::format("%s/%s", userState->getUserDirName(), filename);
+        if (filepath8.string() == NULL) {
+            ALOGW("can't create filepath for key %s", filename);
+            return SYSTEM_ERROR;
+        }
 
         ResponseCode responseCode = get(filepath8.string(), keyBlob, type, uid);
         if (responseCode == NO_ERROR) {
@@ -1102,7 +1087,8 @@ public:
         // If this is one of the legacy UID->UID mappings, use it.
         uid_t euid = get_keystore_euid(uid);
         if (euid != uid) {
-            filepath8 = getKeyNameForUidWithDir(keyName, euid);
+            encode_key_for_uid(filename, euid, keyName);
+            filepath8 = android::String8::format("%s/%s", userState->getUserDirName(), filename);
             responseCode = get(filepath8.string(), keyBlob, type, uid);
             if (responseCode == NO_ERROR) {
                 return responseCode;
@@ -1110,14 +1096,13 @@ public:
         }
 
         // They might be using a granted key.
-        android::String8 filename8 = getKeyName(keyName);
+        encode_key(filename, keyName);
         char* end;
-        strtoul(filename8.string(), &end, 10);
+        strtoul(filename, &end, 10);
         if (end[0] != '_' || end[1] == 0) {
             return KEY_NOT_FOUND;
         }
-        filepath8 = android::String8::format("%s/%s", getUserState(uid)->getUserDirName(),
-                filename8.string());
+        filepath8 = android::String8::format("%s/%s", userState->getUserDirName(), filename);
         if (!hasGrant(filepath8.string(), uid)) {
             return responseCode;
         }
@@ -2145,19 +2130,6 @@ public:
         closedir(dir);
 
         return rc;
-    }
-
-    int32_t wipe_user(int32_t user_id) {
-#ifdef INTEL_FEATURE_ARKHAM
-        uid_t callingUid = IPCThreadState::self()->getCallingUid();
-        if (get_app_id(callingUid) == AID_SYSTEM) {
-            return wipe_container_keystore(user_id);
-        }
-        ALOGE("permission denied for %d to wipe_user %d", callingUid, user_id);
-#else
-        ALOGE("wipe_user %d not implemented", user_id);
-#endif
-        return SYSTEM_ERROR;
     }
 
 private:

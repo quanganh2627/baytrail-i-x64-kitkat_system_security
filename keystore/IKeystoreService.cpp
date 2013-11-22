@@ -552,30 +552,6 @@ public:
         }
         return ret;
     }
-
-    virtual int32_t wipe_user(int32_t user_id)
-    {
-#ifdef INTEL_FEATURE_ARKHAM
-        Parcel data, reply;
-        data.writeInterfaceToken(IKeystoreService::getInterfaceDescriptor());
-        data.writeInt32(user_id);
-        status_t status = remote()->transact(BnKeystoreService::WIPE_USER, data, &reply);
-        if (status != NO_ERROR) {
-            ALOGD("wipe_user() could not contact remote: %d\n", status);
-            return -1;
-        }
-        int32_t err = reply.readExceptionCode();
-        int32_t ret = reply.readInt32();
-        if (err < 0) {
-            ALOGD("wipe_user() caught exception %d\n", err);
-            return -1;
-        }
-        return ret;
-#else
-        ALOGW("operation not supported: wipe_user %d", user_id);
-        return -1;
-#endif
-    }
 };
 
 IMPLEMENT_META_INTERFACE(KeystoreService, "android.security.keystore");
@@ -852,15 +828,6 @@ status_t BnKeystoreService::onTransact(
             CHECK_INTERFACE(IKeystoreService, data, reply);
             int64_t uid = data.readInt64();
             int32_t ret = clear_uid(uid);
-            reply->writeNoException();
-            reply->writeInt32(ret);
-            return NO_ERROR;
-        }
-        // ARKHAM-1087: Add wipe option for container's keystore
-        case WIPE_USER: {
-            CHECK_INTERFACE(IKeystoreService, data, reply);
-            int32_t user_id = data.readInt32();
-            int32_t ret = wipe_user(user_id);
             reply->writeNoException();
             reply->writeInt32(ret);
             return NO_ERROR;
