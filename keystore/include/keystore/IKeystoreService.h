@@ -65,6 +65,10 @@ public:
         DUPLICATE = IBinder::FIRST_CALL_TRANSACTION + 20,
         IS_HARDWARE_BACKED = IBinder::FIRST_CALL_TRANSACTION + 21,
         CLEAR_UID = IBinder::FIRST_CALL_TRANSACTION + 22,
+#ifdef INTEL_FEATURE_ARKHAM
+        // ARKHAM-1087: Add wipe option for container's keystore
+        WIPE_USER = IBinder::FIRST_CALL_TRANSACTION + 23,
+#endif
     };
 
     DECLARE_META_INTERFACE(KeystoreService);
@@ -120,6 +124,11 @@ public:
     virtual int32_t is_hardware_backed(const String16& keyType) = 0;
 
     virtual int32_t clear_uid(int64_t uid) = 0;
+
+#ifdef INTEL_FEATURE_ARKHAM
+    // ARKHAM-1087: Add wipe option for container's keystore
+    virtual int32_t wipe_user(int32_t user_id) = 0;
+#endif
 };
 
 // ----------------------------------------------------------------------------
