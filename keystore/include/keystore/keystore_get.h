@@ -18,6 +18,7 @@
 #define __KEYSTORE_GET_H__
 
 #include <sys/types.h>
+#define KEYSTORE_MESSAGE_SIZE 65535
 
 #ifdef __cplusplus
 extern "C" {
