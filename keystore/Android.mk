@@ -18,9 +18,6 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 LOCAL_CFLAGS := -Wall -Wextra -Werror
-ifeq ($(strip $(INTEL_FEATURE_ARKHAM)),true)
-LOCAL_CFLAGS += -DINTEL_FEATURE_ARKHAM
-endif
 LOCAL_SRC_FILES := keystore.cpp keyblob_utils.cpp
 LOCAL_C_INCLUDES := external/openssl/include
 LOCAL_SHARED_LIBRARIES := \
@@ -35,6 +32,11 @@ LOCAL_SHARED_LIBRARIES := \
 LOCAL_MODULE := keystore
 LOCAL_MODULE_TAGS := optional
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
+ifeq ($(strip $(INTEL_FEATURE_ARKHAM)),true)
+LOCAL_CFLAGS += -DINTEL_FEATURE_ARKHAM
+LOCAL_SHARED_LIBRARIES += libarkhamkeystore
+LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/libarkhamkeystore
+endif
 include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
@@ -45,6 +47,9 @@ LOCAL_SHARED_LIBRARIES := libcutils libcrypto libkeystore_binder libutils liblog
 LOCAL_MODULE := keystore_cli
 LOCAL_MODULE_TAGS := debug
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
+ifeq ($(strip $(INTEL_FEATURE_ARKHAM)),true)
+LOCAL_CFLAGS += -DINTEL_FEATURE_ARKHAM
+endif
 include $(BUILD_EXECUTABLE)
 
 # Library for keystore clients
@@ -57,4 +62,7 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/include
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
 LOCAL_ADDITIONAL_DEPENDENCIES := $(LOCAL_PATH)/Android.mk
+ifeq ($(strip $(INTEL_FEATURE_ARKHAM)),true)
+LOCAL_CFLAGS += -DINTEL_FEATURE_ARKHAM
+endif
 include $(BUILD_SHARED_LIBRARY)
