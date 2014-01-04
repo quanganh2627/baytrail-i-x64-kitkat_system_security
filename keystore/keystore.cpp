@@ -71,7 +71,7 @@
 #define PASSWORD_SIZE   VALUE_SIZE
 
 #ifdef INTEL_FEATURE_ARKHAM
-#include "../../../vendor/intel/PRIVATE/arkham/aosp/system/security/keystore/keystore_containers.cpp"
+#include "keystore_containers.h"
 #endif
 
 struct BIGNUM_Delete {
